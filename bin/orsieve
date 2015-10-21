@@ -6,8 +6,11 @@ from twisted.internet.endpoints import serverFromString, clientFromString
 from twisted.internet.defer import Deferred
 from twisted.internet.task import react
 
-from sys import argv
 from tubes.protocol import factoryFromFlow
+from sys import argv
+import click
+import json
+
 from or_ctl_sieve import proxyOrSieve
 
 CLIENT_ALLOWED = """
@@ -45,12 +48,22 @@ CLIENT_REPLACEMENTS = {
         "SETEVENTS NEWCONSENSUS BW"
 }
 
-def main(reactor, listen="tcp:interface=127.0.0.1:9876", connect="tcp:127.0.0.1:9051"):
+@click.command()
+@click.option('--listen', default="tcp:interface=127.0.0.1:9876", help='listen endpoint')
+@click.option('--connect', default="tcp:127.0.0.1:9051", help='connect endpoint')
+def main(listen, connect):
+    """Simple program that greets NAME for a total of COUNT times."""
+    click.echo('listen %r' % (listen,))
+    click.echo('connect %r' % (connect,))
+    react(buildProxy, [str(listen), str(connect)])
+
+def buildProxy(reactor, listen, connect):
     clientEndpoint = clientFromString(reactor, connect)
     serverEndpoint = serverFromString(reactor, listen)
     proxy_sieve = proxyOrSieve(clientEndpoint, CLIENT_ALLOWED, CLIENT_ALLOWED_PREFIXES, SERVER_ALLOWED, SERVER_ALLOWED_PREFIXES, CLIENT_REPLACEMENTS)
     serverEndpoint.listen(factoryFromFlow(proxy_sieve.tube_factory))
     return Deferred()
 
+
 if __name__ == '__main__':
-    react(main, argv[1:])
+    main()
