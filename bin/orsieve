@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+
+# GPL goes here
+
+from twisted.internet.endpoints import serverFromString, clientFromString
+from twisted.internet.defer import Deferred
+from twisted.internet.task import react
+
+from sys import argv
+from tubes.protocol import factoryFromFlow
+from or_ctl_sieve import proxyOrSieve
+
+CLIENT_ALLOWED = """
+PROTOCOLINFO
+""".strip().split("\n")
+
+CLIENT_ALLOWED_PREFIXES = """
+AUTHENTICATE
+GETCONF BandwidthRate
+GETCONF BandwidthBurst
+GETINFO traffic/read
+GETINFO traffic/written
+GETCONF ControlPort
+""".strip().split("\n")
+
+SERVER_ALLOWED = """
+250-PROTOCOLINFO 1
+250-AUTH METHODS=COOKIE,SAFECOOKIE COOKIEFILE="/var/run/tor/control.authcookie"
+250 OK
+""".strip().split("\n")
+
+SERVER_ALLOWED_PREFIXES = """
+650 BW
+250 BandwidthRate=
+250 BandwidthBurst=
+250-traffic/read=
+250-traffic/written=
+250 ControlPort=
+""".strip().split("\n")
+
+
+REPLACEMENTS = {
+    "SETEVENTS NOTICE ERR NEWDESC NEWCONSENSUS WARN CIRC BW NS":
+        "SETEVENTS NEWCONSENSUS BW"
+}
+
+def main(reactor, listen="tcp:interface=127.0.0.1:9876", connect="tcp:127.0.0.1:9051"):
+    clientEndpoint = clientFromString(reactor, connect)
+    serverEndpoint = serverFromString(reactor, listen)
+    proxy_sieve = proxyOrSieve(clientEndpoint, CLIENT_ALLOWED, CLIENT_ALLOWED_PREFIXES, SERVER_ALLOWED, SERVER_ALLOWED_PREFIXES)
+    serverEndpoint.listen(factoryFromFlow(proxy_sieve.tube_factory))
+    return Deferred()
+
+if __name__ == '__main__':
+    react(main, argv[1:])
