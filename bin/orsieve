@@ -12,6 +12,7 @@ from or_ctl_sieve import proxyOrSieve
 
 CLIENT_ALLOWED = """
 PROTOCOLINFO
+SETEVENTS NEWCONSENSUS BW
 """.strip().split("\n")
 
 CLIENT_ALLOWED_PREFIXES = """
@@ -39,7 +40,7 @@ SERVER_ALLOWED_PREFIXES = """
 """.strip().split("\n")
 
 
-REPLACEMENTS = {
+CLIENT_REPLACEMENTS = {
     "SETEVENTS NOTICE ERR NEWDESC NEWCONSENSUS WARN CIRC BW NS":
         "SETEVENTS NEWCONSENSUS BW"
 }
@@ -47,7 +48,7 @@ REPLACEMENTS = {
 def main(reactor, listen="tcp:interface=127.0.0.1:9876", connect="tcp:127.0.0.1:9051"):
     clientEndpoint = clientFromString(reactor, connect)
     serverEndpoint = serverFromString(reactor, listen)
-    proxy_sieve = proxyOrSieve(clientEndpoint, CLIENT_ALLOWED, CLIENT_ALLOWED_PREFIXES, SERVER_ALLOWED, SERVER_ALLOWED_PREFIXES)
+    proxy_sieve = proxyOrSieve(clientEndpoint, CLIENT_ALLOWED, CLIENT_ALLOWED_PREFIXES, SERVER_ALLOWED, SERVER_ALLOWED_PREFIXES, CLIENT_REPLACEMENTS)
     serverEndpoint.listen(factoryFromFlow(proxy_sieve.tube_factory))
     return Deferred()
 
