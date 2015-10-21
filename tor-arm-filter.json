@@ -1,0 +1,8 @@
+[{
+"client-allowed" : ["PROTOCOLINFO", "SETEVENTS NEWCONSENSUS BW"],
+"client-allowed-prefixes" : ["AUTHENTICATE", "GETCONF BandwidthRate", "GETCONF BandwidthBurst", "GETINFO traffic/read",
+"GETINFO traffic/written", "GETCONF ControlPort"],
+"server-allowed" : ["250-PROTOCOLINFO 1", "250-AUTH METHODS=COOKIE,SAFECOOKIE COOKIEFILE=\"/var/run/tor/control.authcookie\"", "250 OK"],
+"server-allowed-prefixes" : ["650 BW", "250 BandwidthRate=", "250 BandwidthBurst=", "250-traffic/read=", "250-traffic/written=", "250 ControlPort="],
+"client-replacements" : {"SETEVENTS NOTICE ERR NEWDESC NEWCONSENSUS WARN CIRC BW NS" : "SETEVENTS NEWCONSENSUS BW"}
+}]

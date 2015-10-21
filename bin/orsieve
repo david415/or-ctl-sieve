@@ -13,57 +13,35 @@ import json
 
 from or_ctl_sieve import proxyOrSieve
 
-CLIENT_ALLOWED = """
-PROTOCOLINFO
-SETEVENTS NEWCONSENSUS BW
-""".strip().split("\n")
-
-CLIENT_ALLOWED_PREFIXES = """
-AUTHENTICATE
-GETCONF BandwidthRate
-GETCONF BandwidthBurst
-GETINFO traffic/read
-GETINFO traffic/written
-GETCONF ControlPort
-""".strip().split("\n")
-
-SERVER_ALLOWED = """
-250-PROTOCOLINFO 1
-250-AUTH METHODS=COOKIE,SAFECOOKIE COOKIEFILE="/var/run/tor/control.authcookie"
-250 OK
-""".strip().split("\n")
-
-SERVER_ALLOWED_PREFIXES = """
-650 BW
-250 BandwidthRate=
-250 BandwidthBurst=
-250-traffic/read=
-250-traffic/written=
-250 ControlPort=
-""".strip().split("\n")
-
-
-CLIENT_REPLACEMENTS = {
-    "SETEVENTS NOTICE ERR NEWDESC NEWCONSENSUS WARN CIRC BW NS":
-        "SETEVENTS NEWCONSENSUS BW"
-}
 
 @click.command()
 @click.option('--listen', default="tcp:interface=127.0.0.1:9876", help='listen endpoint')
 @click.option('--connect', default="tcp:127.0.0.1:9051", help='connect endpoint')
-def main(listen, connect):
-    """Simple program that greets NAME for a total of COUNT times."""
+@click.argument('config')
+def main(listen, connect, config):
+    """super paranoid tor control port filtration"""
     click.echo('listen %r' % (listen,))
     click.echo('connect %r' % (connect,))
+
+    config_data = open(config, 'r').read()
+    print "config data %r" % (config_data,)
+    json_fields = json.loads(config_data)[0]
+    print "json fields %r" % (json_fields,)
+
+    client_allowed = json_fields['client-allowed']
+    client_allowed_prefixes = json_fields['client-allowed-prefixes']
+    server_allowed = json_fields['server-allowed']
+    server_allowed_prefixes = json_fields['server-allowed-prefixes']
+    client_replacements = json_fields['client-replacements']
+
+    def buildProxy(reactor, listen, connect):
+        clientEndpoint = clientFromString(reactor, connect)
+        serverEndpoint = serverFromString(reactor, listen)
+        proxy_sieve = proxyOrSieve(clientEndpoint, client_allowed, client_allowed_prefixes, server_allowed, server_allowed_prefixes, client_replacements)
+        serverEndpoint.listen(factoryFromFlow(proxy_sieve.tube_factory))
+        return Deferred()
+
     react(buildProxy, [str(listen), str(connect)])
-
-def buildProxy(reactor, listen, connect):
-    clientEndpoint = clientFromString(reactor, connect)
-    serverEndpoint = serverFromString(reactor, listen)
-    proxy_sieve = proxyOrSieve(clientEndpoint, CLIENT_ALLOWED, CLIENT_ALLOWED_PREFIXES, SERVER_ALLOWED, SERVER_ALLOWED_PREFIXES, CLIENT_REPLACEMENTS)
-    serverEndpoint.listen(factoryFromFlow(proxy_sieve.tube_factory))
-    return Deferred()
-
 
 if __name__ == '__main__':
     main()
