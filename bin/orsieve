@@ -38,7 +38,7 @@ def main(listen, connect, config):
         clientEndpoint = clientFromString(reactor, connect)
         serverEndpoint = serverFromString(reactor, listen)
         proxy_sieve = proxyOrSieve(clientEndpoint, client_allowed, client_allowed_prefixes, server_allowed, server_allowed_prefixes, client_replacements)
-        serverEndpoint.listen(factoryFromFlow(proxy_sieve.tube_factory))
+        serverEndpoint.listen(factoryFromFlow(proxy_sieve.new_proxy_flow))
         return Deferred()
 
     react(buildProxy, [str(listen), str(connect)])
