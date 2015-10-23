@@ -26,11 +26,11 @@ def main(listen, connect, config):
     config_data = open(config, 'r').read()
     json_fields = json.loads(config_data)[0]
 
-    client_allowed = json_fields['client-allowed']
-    client_allowed_prefixes = json_fields['client-allowed-prefixes']
-    server_allowed = json_fields['server-allowed']
-    server_allowed_prefixes = json_fields['server-allowed-prefixes']
-    client_replacements = json_fields['client-replacements']
+    client_allowed = [s.encode('utf-8') for s in json_fields['client-allowed']]
+    client_allowed_prefixes = [s.encode('utf-8') for s in json_fields['client-allowed-prefixes']]
+    server_allowed = [s.encode('utf-8') for s in json_fields['server-allowed']]
+    server_allowed_prefixes = [s.encode('utf-8') for s in json_fields['server-allowed-prefixes']]
+    client_replacements = [s.encode('utf-8') for s in json_fields['client-replacements']]
 
     def buildProxy(reactor, listen, connect):
         clientEndpoint = clientFromString(reactor, connect)
