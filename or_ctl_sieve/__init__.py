@@ -2,8 +2,8 @@
 from __future__ import absolute_import
 
 from . import sieve
-from .sieve import proxyOrSieve
+from .sieve import OrControlSieveProxy
 
 
-__all__ = ['sieve', 'proxyOrSieve']
+__all__ = ['sieve', 'OrControlSieveProxy']
 

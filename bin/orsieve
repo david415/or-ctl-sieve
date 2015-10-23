@@ -11,7 +11,7 @@ from sys import argv
 import click
 import json
 
-from or_ctl_sieve import proxyOrSieve
+from or_ctl_sieve import OrControlSieveProxy
 
 
 @click.command()
@@ -35,7 +35,7 @@ def main(listen, connect, config):
     def buildProxy(reactor, listen, connect):
         clientEndpoint = clientFromString(reactor, connect)
         serverEndpoint = serverFromString(reactor, listen)
-        proxy_sieve = proxyOrSieve(clientEndpoint, client_allowed, client_allowed_prefixes, server_allowed, server_allowed_prefixes, client_replacements)
+        proxy_sieve = OrControlSieveProxy(clientEndpoint, client_allowed, client_allowed_prefixes, server_allowed, server_allowed_prefixes, client_replacements)
         serverEndpoint.listen(factoryFromFlow(proxy_sieve.new_proxy_flow))
         return Deferred()
 

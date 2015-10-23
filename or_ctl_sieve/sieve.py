@@ -9,23 +9,21 @@ from tubes.fan import Out, In
 from tubes.itube import IDrain
 from tubes.kit import beginFlowingFrom
 
-@tube
-class replace_with_error_tube(object):
-    def __init__(self, err_msg):
-        self.err_msg = err_msg
-    def received(self, line):
-        yield self.err_msg
 
-@tube
-class replace_tube(object):
-    def __init__(self, replacements):
-        self.replacements = replacements
+## --> thanks to habnabit for these two higher order functions
+def tubeFilter(pred):
+    @receiver()
+    def received(item):
+        if pred(item):
+            yield item
+    return series(received)
 
-    def received(self, line):
-        if line in self.replacements:
-            yield self.replacements[line]
-        else:
-            yield line
+def tubeMap(func):
+    @receiver()
+    def received(item):
+        yield func(item)
+    return series(received)
+## <--
 
 class or_command_filter(object):
     def __init__(self, allowed, allowed_prefixes):
@@ -43,21 +41,36 @@ class or_command_filter(object):
                     break
         return allow
 
-def tubeFilter(pred):
-    @receiver()
-    def received(item):
-        if pred(item):
-            yield item
-    return series(received)
+@tube
+class replace_tube(object):
+    def __init__(self, replacements):
+        self.replacements = replacements
+
+    def received(self, line):
+        if line in self.replacements:
+            yield self.replacements[line]
+        else:
+            yield line
 
 def display_received(label):
+    # tube used for debuging
     @receiver()
     def received(item):
         print "%r DISPLAY %r" % (label, item)
         yield item
     return series(received)
 
-class proxyOrSieve(object):
+class OrControlSieveProxy(object):
+    """
+    abstract:
+    Creates a proxy server for the Tor control port.
+
+    features:
+     - bidirectional filtration
+     - filtration sieve uses white list exact match and prefix match
+     - client command replacement mapping
+     - error message sent to client when command denied
+    """
     filtered_msg = "510 Tor Control command proxy denied: filtration policy."
     def __init__(self, proxyEndpoint, client_allowed, client_allowed_prefixes, server_allowed, server_allowed_prefixes, client_replacements):
         self.proxyEndpoint = proxyEndpoint
@@ -69,15 +82,17 @@ class proxyOrSieve(object):
 
     def new_proxy_flow(self, listening_fount, listening_drain):
         """
-                                       /--> sieve_fount --> filter tube --> connect drain --> tor control port
+        here's a summarized graph diagraph that does not include framing:
+
+                                       /--> sieve_fount --> filter tube --------> connecting_drain
                                       /
         listening_fount ---> fan out <----> err_fount --> !filter tube
                                                                       \
                                                              replace with error tube
-                                                                      /
-        listening_drain <------------------------------ fan in <-----/
-                                                                     \
-                                                                      \---< connect fount <-- tor control port
+                                                            /
+        listening_drain <-------------------- fan in <-----/
+                                                           \
+                                                            \---< filter tube <-- connecting_fount
         """
         def outgoing_tube_factory(connecting_fount, connecting_drain):
             client_filter = or_command_filter(self.client_allowed, self.client_allowed_prefixes)
@@ -97,6 +112,7 @@ class proxyOrSieve(object):
             server_fanin_err_drain = server_fanin.newDrain()
 
             error_sieve = tubeFilter(lambda item: not client_filter.is_allowed(item))
+            replace_with_error_tube = lambda err_message: tubeMap(lambda item: err_message)
             proxy_error_sieve = series(bytesToLines(), error_sieve, replace_with_error_tube(self.filtered_msg), linesToBytes())
             client_err_fount.flowTo(series(proxy_error_sieve, server_fanin_err_drain))
 
