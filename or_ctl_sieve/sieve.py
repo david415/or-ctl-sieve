@@ -68,6 +68,17 @@ class proxyOrSieve(object):
         self.client_replacements = client_replacements
 
     def new_proxy_flow(self, listening_fount, listening_drain):
+        """
+                                       /--> sieve_fount --> filter tube --> connect drain --> tor control port
+                                      /
+        listening_fount ---> fan out <----> err_fount --> !filter tube
+                                                                      \
+                                                             replace with error tube
+                                                                      /
+        listening_drain <------------------------------ fan in <-----/
+                                                                     \
+                                                                      \---< connect fount <-- tor control port
+        """
         def outgoing_tube_factory(connecting_fount, connecting_drain):
             client_filter = or_command_filter(self.client_allowed, self.client_allowed_prefixes)
             client_sieve = tubeFilter(client_filter.is_allowed)
