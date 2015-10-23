@@ -41,16 +41,13 @@ class or_command_filter(object):
                     break
         return allow
 
-@tube
-class replace_tube(object):
-    def __init__(self, replacements):
-        self.replacements = replacements
-
-    def received(self, line):
-        if line in self.replacements:
-            yield self.replacements[line]
+def replacerTubeFactory(replacements):
+    def replacer(item):
+        if item in replacements:
+            return replacements[item]
         else:
-            yield line
+            return item
+    return tubeMap(replacer)
 
 def display_received(label):
     # tube used for debuging
@@ -82,7 +79,7 @@ class OrControlSieveProxy(object):
 
     def new_proxy_flow(self, listening_fount, listening_drain):
         """
-        here's a summarized graph diagraph that does not include framing:
+        here's a summarized graph that does not include framing:
 
                                        /--> sieve_fount --> filter tube --------> connecting_drain
                                       /
@@ -97,7 +94,7 @@ class OrControlSieveProxy(object):
         def outgoing_tube_factory(connecting_fount, connecting_drain):
             client_filter = or_command_filter(self.client_allowed, self.client_allowed_prefixes)
             client_sieve = tubeFilter(client_filter.is_allowed)
-            client_replace = replace_tube(self.client_replacements)
+            client_replace = replacerTubeFactory(self.client_replacements)
             proxy_client_sieve = series(bytesToLines(), client_replace, client_sieve, linesToBytes())
 
             client_fanout = Out()
