@@ -88,45 +88,36 @@ class ErrProxyRouter(object):
             print "filtered: %r" % (line,)
             yield to(self.err_route, line)
 
+class Hub(object):
+    def __init__(self):
+        self._out = Out()
+        self._in = In()
+        self._in.fount.flowTo(self._out.drain)
+        self.error_drain = self._in.newDrain()
+        self.proxy_drain = self._in.newDrain()
+
+    def get_drain_fount(self):
+        return self._out.newFount()
+
 class proxyOrSieve(object):
     filtered_msg = "510 Tor Control command proxy denied: filtration policy."
     def __init__(self, proxyEndpoint, client_allowed, client_allowed_prefixes, server_allowed, server_allowed_prefixes, client_replacements):
         self.proxyEndpoint = proxyEndpoint
         self.client_allowed = client_allowed
         self.client_allowed_prefixes = client_allowed_prefixes
-        self.server_allowed = server_allowed
-        self.server_allowed_prefixes = server_allowed_prefixes
         self.client_replacements = client_replacements
 
     def new_proxy_flow(self, listening_fount, listening_drain):
-        """cross-connects the client endpoint self.proxyEndpoint,
-        with the listener's fount and drain.
-        """
-        print "new_proxy_flow listening_fount %r listening_drain %r" % (listening_fount, listening_drain)
         def outgoing_tube_factory(connecting_fount, connecting_drain):
-            # drain hub takes proxy error messages from us or legit messages from the server
-            fan_in = In()
-            hub_error_drain = fan_in.newDrain()
-            hub_server_drain = fan_in.newDrain()
-
-            # drain hub inputs
-            # XXX todo: apply sieve
-            connecting_fount.flowTo(hub_server_drain)
-
-            # drain hub input from proxy error generator
-            in_err = In()
-            err_drain = in_err.newDrain()
-
-            start_fount = listening_fount.flowTo(bytesToLines())
+            hub = Hub()
+            listening_fount.flowTo(series(bytesToLines(),))
+            hub_drain_fount = hub.get_drain_fount()
+            connecting_fount.flowTo(series(bytesToLines(), hub.proxy_drain))
             
-            # create a router that flows into proxy_err_tube AND connecting_drain
-            router = ErrProxyRouter(self.client_allowed, self.client_allowed_prefixes, start_fount, err_drain, connecting_drain)
+            error_tube = series(replace_with_error_tube(self.filtered_msg), hub.error_drain)
+            connecting_tube = series(linesToBytes(), connecting_drain)
+            router = ErrProxyRouter(self.client_allowed, self.client_allowed_prefixes, listening_fount.flowTo(series(bytesToLines())), error_tube, connecting_tube)
 
-            print "err drain FOUNT %r" % (err_drain.fount,)
-            err_drain.fount.flowTo(series(replace_with_error_tube(self.filtered_msg)), hub_error_drain)
+            hub_drain_fount.flowTo(series(linesToBytes(), listening_drain))
 
-            
-            # drain hub output
-            fan_in.fount.flowTo(series(linesToBytes(), listening_drain))
-            
-        self.proxyEndpoint.connect(factoryFromFlow(outgoing_tube_factory)) # fin.
+        self.proxyEndpoint.connect(factoryFromFlow(outgoing_tube_factory))
