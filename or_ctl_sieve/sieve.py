@@ -48,15 +48,13 @@ class or_command_filter(object):
 
 @tube
 class filter_tube(object):
-    def __init__(self, allowed, allowed_prefixes, connecting_drain):
+    def __init__(self, allowed, allowed_prefixes):
         self.filter = or_command_filter(allowed, allowed_prefixes)
-        self.connecting_drain = connecting_drain
-        self.listening_drain = listening_drain
 
     def received(self, line):
-        if self.filter.is_allowed():
+        if self.filter.is_allowed(line):
             print "allowed: %r" % (line,)
-            yield to(self.connecting_drain, line)
+            yield line
         else:
             print "filtered: %r" % (line,)
 
@@ -81,23 +79,12 @@ class ErrProxyRouter(object):
         self.server_route.flowTo(connector_drain)
 
     def received(self, line):
-        if self.filter.is_allowed():
+        if self.filter.is_allowed(line):
             print "allowed: %r" % (line,)
             yield to(self.server_route, line)
         else:
             print "filtered: %r" % (line,)
             yield to(self.err_route, line)
-
-class Hub(object):
-    def __init__(self):
-        self._out = Out()
-        self._in = In()
-        self._in.fount.flowTo(self._out.drain)
-        self.error_drain = self._in.newDrain()
-        self.proxy_drain = self._in.newDrain()
-
-    def get_drain_fount(self):
-        return self._out.newFount()
 
 class proxyOrSieve(object):
     filtered_msg = "510 Tor Control command proxy denied: filtration policy."
@@ -105,19 +92,32 @@ class proxyOrSieve(object):
         self.proxyEndpoint = proxyEndpoint
         self.client_allowed = client_allowed
         self.client_allowed_prefixes = client_allowed_prefixes
+        self.server_allowed = server_allowed
+        self.server_allowed_prefixes = server_allowed_prefixes
         self.client_replacements = client_replacements
 
     def new_proxy_flow(self, listening_fount, listening_drain):
         def outgoing_tube_factory(connecting_fount, connecting_drain):
-            hub = Hub()
-            listening_fount.flowTo(series(bytesToLines(),))
-            hub_drain_fount = hub.get_drain_fount()
-            connecting_fount.flowTo(series(bytesToLines(), hub.proxy_drain))
-            
-            error_tube = series(replace_with_error_tube(self.filtered_msg), hub.error_drain)
-            connecting_tube = series(linesToBytes(), connecting_drain)
-            router = ErrProxyRouter(self.client_allowed, self.client_allowed_prefixes, listening_fount.flowTo(series(bytesToLines())), error_tube, connecting_tube)
 
-            hub_drain_fount.flowTo(series(linesToBytes(), listening_drain))
+            fan_in = In()
+
+            # fan-in drain
+            fan_in_proxy_drain = fan_in.newDrain()
+            server_sieve = filter_tube(self.server_allowed, self.server_allowed_prefixes)            
+            proxy_server_sieve = series(bytesToLines(), server_sieve)
+            connecting_fount.flowTo(series(proxy_server_sieve, fan_in_proxy_drain))
+
+            # fan-in fount
+            # this is broken
+            fan_in.fount.flowTo(series(linesToBytes(), listening_drain))
+            #fan_out = Out()
+            #fan_in.fount.flowTo(fan_out.drain)
+            #fan_out_fount = fan_out.newFount()
+            #fan_out_fount.flowTo(series(linesToBytes(), listening_drain))
+
+            client_sieve = filter_tube(self.client_allowed, self.client_allowed_prefixes)
+            client_replace = replace_tube(self.client_replacements)
+            proxy_client_sieve = series(bytesToLines(), client_replace, client_sieve, linesToBytes())
+            listening_fount.flowTo(series(proxy_client_sieve, connecting_drain))
 
         self.proxyEndpoint.connect(factoryFromFlow(outgoing_tube_factory))

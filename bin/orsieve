@@ -24,9 +24,7 @@ def main(listen, connect, config):
     click.echo('connect %r' % (connect,))
 
     config_data = open(config, 'r').read()
-    print "config data %r" % (config_data,)
     json_fields = json.loads(config_data)[0]
-    print "json fields %r" % (json_fields,)
 
     client_allowed = json_fields['client-allowed']
     client_allowed_prefixes = json_fields['client-allowed-prefixes']
